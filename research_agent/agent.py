@@ -44,9 +44,9 @@ SYNTHESIS_SYSTEM = (
 
 
 class ResearchAgent:
-    def __init__(self, llm: LLM | None = None, verbose: bool = True):
+    def __init__(self, llm: LLM | None = None, verbose: bool = True, log_sink=None):
         self.llm = llm or LLM()
-        self.log = StepLogger(enabled=verbose)
+        self.log = StepLogger(enabled=verbose, sink=log_sink)
 
     def plan(self, topic: str) -> list[str]:
         """Ask the LLM for a handful of focused search queries."""

@@ -8,12 +8,20 @@ from __future__ import annotations
 
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime
 
 
 class StepLogger:
-    def __init__(self, enabled: bool = True):
+    def __init__(
+        self,
+        enabled: bool = True,
+        sink: Callable[[str], None] | None = None,
+    ):
+        # enabled -> print to stderr (terminal). sink -> also forward each line
+        # to a callback (used by the web UI to stream progress to the browser).
         self.enabled = enabled
+        self.sink = sink
         self._run_start: float | None = None
         self._step_start: float | None = None
 
@@ -21,6 +29,8 @@ class StepLogger:
     def _w(self, line: str = "") -> None:
         if self.enabled:
             print(line, file=sys.stderr, flush=True)
+        if self.sink is not None:
+            self.sink(line)
 
     @staticmethod
     def _now() -> str:

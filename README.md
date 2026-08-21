@@ -45,6 +45,19 @@ python main.py "topic" --quiet            # hide progress logs
 
 Reports are written to the `reports/` directory as timestamped Markdown files.
 
+## Web UI
+
+Prefer a browser over the terminal? Run the web app:
+
+```bash
+python web.py
+```
+
+Then open <http://127.0.0.1:5000>. Type a topic, click **Research**, and watch
+live progress stream in the page while it works. When it finishes you get the
+report on screen plus buttons to download the Markdown and PDF. Stop the server
+with `Ctrl + C`.
+
 ## Use it from Claude (MCP server)
 
 You can plug this agent into **Claude Desktop** or **Claude Code** as an MCP
@@ -106,7 +119,9 @@ Behaviour is controlled by environment variables (see `config.py` for defaults):
 ```
 AI-Research-Agent/
 ├── main.py                 # CLI entry point
+├── web.py                  # Web UI (Flask, live progress)
 ├── mcp_server.py           # MCP server (use the agent from Claude)
+├── templates/index.html    # Web UI page
 ├── config.py               # Configuration + env overrides
 ├── requirements.txt
 └── research_agent/
