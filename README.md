@@ -45,6 +45,49 @@ python main.py "topic" --quiet            # hide progress logs
 
 Reports are written to the `reports/` directory as timestamped Markdown files.
 
+## Use it from Claude (MCP server)
+
+You can plug this agent into **Claude Desktop** or **Claude Code** as an MCP
+server. Then, inside Claude, just ask it to research something and it will call
+your local agent behind the scenes.
+
+The server (`mcp_server.py`) exposes two tools:
+
+| Tool | What it does |
+|---|---|
+| `research(topic)` | Full pipeline: plan → search → read → write a cited report. |
+| `web_search(query)` | Fast lookup: returns top web results (no reading/LLM). |
+
+**Ollama must be running** while you use it.
+
+### Claude Desktop
+
+Edit `claude_desktop_config.json` (on Windows it's at
+`%APPDATA%\Claude\claude_desktop_config.json`) and add:
+
+```json
+{
+  "mcpServers": {
+    "ai-research-agent": {
+      "command": "C:\\Users\\Kiran.Muli\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+      "args": ["D:\\Resarch Agent\\AI-Research-Agent\\mcp_server.py"],
+      "cwd": "D:\\Resarch Agent\\AI-Research-Agent"
+    }
+  }
+}
+```
+
+Then restart Claude Desktop. You should see the `research` and `web_search`
+tools available. Try asking: *"Research the health benefits of green tea."*
+
+### Claude Code
+
+From the project folder, run:
+
+```bash
+claude mcp add ai-research-agent -- python mcp_server.py
+```
+
 ## Configuration
 
 Behaviour is controlled by environment variables (see `config.py` for defaults):
@@ -63,6 +106,7 @@ Behaviour is controlled by environment variables (see `config.py` for defaults):
 ```
 AI-Research-Agent/
 ├── main.py                 # CLI entry point
+├── mcp_server.py           # MCP server (use the agent from Claude)
 ├── config.py               # Configuration + env overrides
 ├── requirements.txt
 └── research_agent/
