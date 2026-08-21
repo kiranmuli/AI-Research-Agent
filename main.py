@@ -53,8 +53,12 @@ def main() -> int:
 
     if not args.no_save:
         sources = [(s.title, s.url) for s in result.sources]
-        path = save_report(result.topic, result.report, sources)
-        print(f"Report saved to: {path}")
+        md_path, pdf_path = save_report(result.topic, result.report, sources)
+        print(f"Markdown saved to: {md_path}")
+        if pdf_path:
+            print(f"PDF saved to:      {pdf_path}")
+        else:
+            print("PDF: could not be generated (Markdown was still saved).")
 
     return 0
 
