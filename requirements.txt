@@ -6,3 +6,8 @@ mcp>=1.2.0
 markdown>=3.5
 xhtml2pdf>=0.2.11
 flask>=3.0
+
+# Optional — only needed for the alternative LangChain version
+# (langchain_agent.py). The core agent does not use these.
+langchain-ollama>=0.2
+langgraph>=0.2

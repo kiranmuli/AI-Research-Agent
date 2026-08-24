@@ -45,6 +45,27 @@ python main.py "topic" --quiet            # hide progress logs
 
 Reports are written to the `reports/` directory as timestamped Markdown files.
 
+## Two flavours: hand-built vs LangChain
+
+This repo ships the same idea built two ways, so you can compare them:
+
+| | Hand-built (`research_agent/`) | LangChain (`langchain_agent.py`) |
+|---|---|---|
+| Steps | Fixed pipeline we coded: plan → search → read → write | The model decides when to search, read, and write |
+| Control | Full — every step is visible | The framework runs the loop |
+| Dependencies | Tiny | Adds `langchain-ollama`, `langgraph` |
+
+Run the LangChain version:
+
+```bash
+pip install langchain-ollama langgraph
+python langchain_agent.py "benefits of green tea"
+```
+
+It prints each decision the agent makes (which tool it calls) so you can watch
+it think. Everything else in this README describes the hand-built version, which
+powers the CLI, web UI, and MCP server.
+
 ## Web UI
 
 Prefer a browser over the terminal? Run the web app:
