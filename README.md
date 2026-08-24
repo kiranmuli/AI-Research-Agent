@@ -126,6 +126,7 @@ AI-Research-Agent/
 ├── requirements.txt
 └── research_agent/
     ├── agent.py            # Orchestration: plan -> search -> read -> synthesize
+    ├── singletons.py       # Shared, reused LLM + agent instances
     ├── llm.py              # Local Ollama client
     ├── search.py           # DuckDuckGo web search
     ├── fetch.py            # URL fetch + text extraction

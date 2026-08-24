@@ -11,9 +11,8 @@ from __future__ import annotations
 
 from mcp.server import MCPServer
 
-from research_agent.agent import ResearchAgent
-from research_agent.llm import LLM
 from research_agent.search import web_search as _web_search
+from research_agent.singletons import get_agent
 
 mcp = MCPServer("ai-research-agent")
 
@@ -29,13 +28,12 @@ def research(topic: str) -> str:
     Args:
         topic: The topic or question to research.
     """
-    llm = LLM()
-    ok, msg = llm.is_available()
+    agent = get_agent()
+    ok, msg = agent.llm.is_available()
     if not ok:
         return f"Research agent unavailable: {msg}"
 
-    agent = ResearchAgent(llm=llm, verbose=False)
-    result = agent.research(topic)
+    result = agent.research(topic, verbose=False)
 
     lines = [result.report, "", "## Sources", ""]
     if result.sources:

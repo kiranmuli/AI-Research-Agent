@@ -11,9 +11,17 @@ import argparse
 import sys
 
 import config
-from research_agent.agent import ResearchAgent
-from research_agent.llm import LLM
 from research_agent.report import save_report
+from research_agent.singletons import get_agent
+
+# The Windows console uses a limited codepage; the model can emit characters
+# (arrows, curly quotes, ...) it cannot encode. Force UTF-8 so printing the
+# report never crashes. Saved files are already written as UTF-8.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 
 def main() -> int:
@@ -38,14 +46,13 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    llm = LLM(model=args.model)
-    ok, msg = llm.is_available()
+    agent = get_agent(args.model)
+    ok, msg = agent.llm.is_available()
     if not ok:
         print(f"Error: {msg}", file=sys.stderr)
         return 1
 
-    agent = ResearchAgent(llm=llm, verbose=not args.quiet)
-    result = agent.research(args.topic)
+    result = agent.research(args.topic, verbose=not args.quiet)
 
     print("\n" + "=" * 70)
     print(result.report)

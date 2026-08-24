@@ -25,9 +25,8 @@ from flask import (
 )
 
 import config
-from research_agent.agent import ResearchAgent
-from research_agent.llm import LLM
 from research_agent.report import save_report
+from research_agent.singletons import get_agent
 
 app = Flask(__name__)
 
@@ -57,13 +56,12 @@ def research():
 
         def worker() -> None:
             try:
-                llm = LLM()
-                ok, msg = llm.is_available()
+                agent = get_agent()
+                ok, msg = agent.llm.is_available()
                 if not ok:
                     q.put(("error", msg))
                     return
-                agent = ResearchAgent(llm=llm, verbose=True, log_sink=sink)
-                result = agent.research(topic)
+                result = agent.research(topic, verbose=True, log_sink=sink)
 
                 sources = [(s.title, s.url) for s in result.sources]
                 md_path, pdf_path = save_report(

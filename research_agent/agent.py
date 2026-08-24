@@ -44,9 +44,10 @@ SYNTHESIS_SYSTEM = (
 
 
 class ResearchAgent:
-    def __init__(self, llm: LLM | None = None, verbose: bool = True, log_sink=None):
+    def __init__(self, llm: LLM | None = None):
         self.llm = llm or LLM()
-        self.log = StepLogger(enabled=verbose, sink=log_sink)
+        # A no-op logger until research() sets one up for the specific run.
+        self.log = StepLogger(enabled=False)
 
     def plan(self, topic: str) -> list[str]:
         """Ask the LLM for a handful of focused search queries."""
@@ -127,7 +128,12 @@ class ResearchAgent:
         )
         return self.llm.chat(system=SYNTHESIS_SYSTEM, user=user, temperature=0.3)
 
-    def research(self, topic: str) -> ResearchResult:
+    def research(
+        self, topic: str, verbose: bool = True, log_sink=None
+    ) -> ResearchResult:
+        # Logging is set per run so one shared (singleton) agent can serve the
+        # terminal (verbose), the web UI (verbose + sink), and Claude (quiet).
+        self.log = StepLogger(enabled=verbose, sink=log_sink)
         self.log.start(topic)
 
         self.log.step(1, TOTAL_STEPS, "PLAN", "turn your topic into search queries")
