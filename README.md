@@ -68,23 +68,39 @@ powers the CLI, web UI, and MCP server.
 
 ## Run with Docker
 
-The web UI can run in a container. Ollama still runs on your host machine; the
-container reaches it at `host.docker.internal`.
+### Fully self-contained (recommended)
+
+`docker compose` runs **everything** — Ollama, the model download, and the web
+UI — so you need nothing installed except Docker:
 
 ```bash
 docker compose up --build
 ```
 
-Then open <http://127.0.0.1:5000>. Or without compose:
+This starts three services: `ollama` (the model server), `model-pull` (pulls
+the model into Ollama on first run, then exits), and `research-agent` (the web
+UI). The first run downloads the model (~2GB) into a named volume, so later runs
+start instantly. Open <http://127.0.0.1:5000> once it's up.
+
+Use a different model by setting `OLLAMA_MODEL`:
+
+```bash
+OLLAMA_MODEL=qwen3:8b docker compose up --build
+```
+
+Note: Ollama in Docker runs on CPU unless a GPU is configured, so responses are
+slower than a native GPU install.
+
+### App container only (use your host's Ollama)
+
+If you already run Ollama on your host, build just the app image:
 
 ```bash
 docker build -t ai-research-agent .
 docker run -p 5000:5000 --add-host host.docker.internal:host-gateway ai-research-agent
 ```
 
-To point at a different Ollama host or model, pass env vars, e.g.
-`-e OLLAMA_MODEL=qwen3:8b`. The image is ~365MB and installs only the web UI's
-dependencies.
+The image is ~365MB and installs only the web UI's dependencies.
 
 ## Web UI
 
