@@ -9,6 +9,7 @@ from research_agent.fetch import fetch_text
 from research_agent.llm import LLM
 from research_agent.logger import StepLogger
 from research_agent.search import SearchResult, web_search
+from research_agent.trace import RunTrace
 
 TOTAL_STEPS = 4
 
@@ -26,6 +27,7 @@ class ResearchResult:
     subquestions: list[str]
     report: str
     sources: list[Source] = field(default_factory=list)
+    trace: dict | None = None
 
 
 PLANNER_SYSTEM = (
@@ -134,24 +136,36 @@ class ResearchAgent:
         # Logging is set per run so one shared (singleton) agent can serve the
         # terminal (verbose), the web UI (verbose + sink), and Claude (quiet).
         self.log = StepLogger(enabled=verbose, sink=log_sink)
+        trace = RunTrace(topic, self.llm.model)
         self.log.start(topic)
 
         self.log.step(1, TOTAL_STEPS, "PLAN", "turn your topic into search queries")
-        queries = self.plan(topic)
+        with trace.step("plan"):
+            queries = self.plan(topic)
+        trace.add_tokens(**self.llm.last_tokens)
+        trace.metric("num_queries", len(queries))
         self.log.step_done(f"{len(queries)} query(ies) ready")
 
         self.log.step(2, TOTAL_STEPS, "SEARCH", "look those queries up on the web")
-        candidates = self.search_candidates(queries)
+        with trace.step("search"):
+            candidates = self.search_candidates(queries)
+        trace.metric("candidate_links", len(candidates))
         self.log.step_done(f"{len(candidates)} candidate link(s) found")
 
         self.log.step(3, TOTAL_STEPS, "READ", "open pages and extract their text")
-        sources = self.read_sources(candidates)
+        with trace.step("read"):
+            sources = self.read_sources(candidates)
+        trace.metric("sources_read", len(sources))
         self.log.step_done(f"{len(sources)} readable source(s) collected")
 
         self.log.step(4, TOTAL_STEPS, "WRITE", "synthesize a cited report")
-        report = self.synthesize(topic, sources)
+        with trace.step("write"):
+            report = self.synthesize(topic, sources)
+        trace.add_tokens(**self.llm.last_tokens)
+        trace.metric("report_chars", len(report))
         self.log.step_done(f"report is {len(report)} chars")
 
+        trace.sources = [{"title": s.title, "url": s.url} for s in sources]
         self.log.finish()
 
         return ResearchResult(
@@ -159,4 +173,5 @@ class ResearchAgent:
             subquestions=queries,
             report=report,
             sources=sources,
+            trace=trace.summary(),
         )

@@ -7,12 +7,21 @@ import ollama
 import config
 
 
+def _field(resp, name: str):
+    """Read a field from an Ollama response (dict or pydantic object)."""
+    if isinstance(resp, dict):
+        return resp.get(name)
+    return getattr(resp, name, None)
+
+
 class LLM:
     """Talks to a local Ollama server."""
 
     def __init__(self, model: str | None = None, host: str | None = None):
         self.model = model or config.OLLAMA_MODEL
         self._client = ollama.Client(host=host or config.OLLAMA_HOST)
+        # Token counts from the most recent chat() call (for observability).
+        self.last_tokens = {"prompt": None, "output": None}
 
     def chat(self, system: str, user: str, temperature: float = 0.2) -> str:
         """Send a system + user prompt and return the assistant text."""
@@ -24,6 +33,10 @@ class LLM:
             ],
             options={"temperature": temperature},
         )
+        self.last_tokens = {
+            "prompt": _field(response, "prompt_eval_count"),
+            "output": _field(response, "eval_count"),
+        }
         return response["message"]["content"].strip()
 
     def is_available(self) -> tuple[bool, str]:

@@ -27,6 +27,7 @@ from flask import (
 import config
 from research_agent.report import save_report
 from research_agent.singletons import get_agent
+from research_agent.trace import save_trace
 
 app = Flask(__name__)
 
@@ -67,6 +68,8 @@ def research():
                 md_path, pdf_path = save_report(
                     result.topic, result.report, sources
                 )
+                if result.trace:
+                    save_trace(result.trace)
                 report_html = _markdown.markdown(
                     result.report,
                     extensions=["extra", "sane_lists", "nl2br"],
@@ -79,6 +82,7 @@ def research():
                             "md": os.path.basename(md_path),
                             "pdf": os.path.basename(pdf_path) if pdf_path else None,
                             "sources": sources,
+                            "trace": result.trace,
                         },
                     )
                 )

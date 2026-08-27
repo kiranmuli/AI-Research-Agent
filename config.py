@@ -29,3 +29,7 @@ USER_AGENT = os.getenv(
 
 # --- Output ---
 REPORTS_DIR = os.getenv("RESEARCH_REPORTS_DIR", "reports")
+
+# --- Observability ---
+# Where per-run JSON traces (timings, token counts, step metrics) are written.
+TRACES_DIR = os.getenv("RESEARCH_TRACES_DIR", "traces")

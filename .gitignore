@@ -11,6 +11,7 @@ env/
 
 # Agent output
 reports/
+traces/
 *.log
 
 # OS / editor

@@ -13,6 +13,7 @@ import sys
 import config
 from research_agent.report import save_report
 from research_agent.singletons import get_agent
+from research_agent.trace import format_summary, save_trace
 
 # The Windows console uses a limited codepage; the model can emit characters
 # (arrows, curly quotes, ...) it cannot encode. Force UTF-8 so printing the
@@ -57,6 +58,11 @@ def main() -> int:
     print("\n" + "=" * 70)
     print(result.report)
     print("=" * 70 + "\n")
+
+    if result.trace:
+        print(format_summary(result.trace))
+        trace_path = save_trace(result.trace)
+        print(f"Trace saved to:    {trace_path}")
 
     if not args.no_save:
         sources = [(s.title, s.url) for s in result.sources]

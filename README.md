@@ -79,6 +79,31 @@ live progress stream in the page while it works. When it finishes you get the
 report on screen plus buttons to download the Markdown and PDF. Stop the server
 with `Ctrl + C`.
 
+## Observability
+
+Every run records what it did — no cloud, no keys, all local:
+
+- **Terminal / CLI**: prints a summary (per-step timings, token counts, how many
+  pages were read) and writes a JSON trace to `traces/`.
+- **Web UI**: shows the same numbers as stat cards above the report.
+- **Trace files** (`traces/*.json`) capture per-run timings, metrics, tokens, and
+  the sources used — handy for spotting the slow step (usually WRITE) or
+  comparing models.
+
+Example summary:
+
+```
+observability ------------------------------------------
+  model         : llama3.2
+  total time    : 207.2s
+  step plan   : 3.7s
+  step search : 13.1s
+  step read   : 7.1s
+  step write  : 183.3s
+  queries=4  links=15  read=6  report_chars=4381
+  tokens        : prompt=2132 output=914
+```
+
 ## Use it from Claude (MCP server)
 
 You can plug this agent into **Claude Desktop** or **Claude Code** as an MCP
@@ -148,6 +173,7 @@ AI-Research-Agent/
 └── research_agent/
     ├── agent.py            # Orchestration: plan -> search -> read -> synthesize
     ├── singletons.py       # Shared, reused LLM + agent instances
+    ├── trace.py            # Local observability (timings, tokens, metrics)
     ├── llm.py              # Local Ollama client
     ├── search.py           # DuckDuckGo web search
     ├── fetch.py            # URL fetch + text extraction
