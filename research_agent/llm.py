@@ -20,11 +20,20 @@ class LLM:
     def __init__(self, model: str | None = None, host: str | None = None):
         self.model = model or config.OLLAMA_MODEL
         self._client = ollama.Client(host=host or config.OLLAMA_HOST)
-        # Token counts from the most recent chat() call (for observability).
-        self.last_tokens = {"prompt": None, "output": None}
 
     def chat(self, system: str, user: str, temperature: float = 0.2) -> str:
         """Send a system + user prompt and return the assistant text."""
+        text, _ = self.chat_with_tokens(system, user, temperature)
+        return text
+
+    def chat_with_tokens(
+        self, system: str, user: str, temperature: float = 0.2
+    ) -> tuple[str, dict]:
+        """Like chat(), but also returns token counts for this call.
+
+        Tokens are returned (not stored on the instance) so a single shared LLM
+        can be used concurrently without runs clobbering each other's counts.
+        """
         response = self._client.chat(
             model=self.model,
             messages=[
@@ -33,11 +42,11 @@ class LLM:
             ],
             options={"temperature": temperature},
         )
-        self.last_tokens = {
+        tokens = {
             "prompt": _field(response, "prompt_eval_count"),
             "output": _field(response, "eval_count"),
         }
-        return response["message"]["content"].strip()
+        return response["message"]["content"].strip(), tokens
 
     def is_available(self) -> tuple[bool, str]:
         """Check the Ollama server is reachable and the model is present."""

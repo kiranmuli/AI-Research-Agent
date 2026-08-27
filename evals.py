@@ -40,16 +40,22 @@ DEFAULT_CASES = [
 
 
 def evaluate(must_include: list[str], report: str, trace: dict) -> dict[str, bool]:
-    """Return a dict of check-name -> pass/fail for one run."""
+    """Return a dict of check-name -> pass/fail for one run.
+
+    `on_topic` is only included when there are terms to check, so ad-hoc topics
+    (no must_include) don't get a vacuous free pass inflating the score.
+    """
     metrics = (trace or {}).get("metrics", {})
     low = report.lower()
-    return {
+    checks = {
         "no_error": not (trace or {}).get("error"),
         "has_report": len(report) >= 300,
         "read_2plus": metrics.get("sources_read", 0) >= 2,
         "cites_sources": bool(re.search(r"\[\d+\]", report)),
-        "on_topic": all(term.lower() in low for term in must_include),
     }
+    if must_include:
+        checks["on_topic"] = all(term.lower() in low for term in must_include)
+    return checks
 
 
 def run_cases(cases: list[dict], model: str | None = None) -> dict:
@@ -92,7 +98,8 @@ def print_scoreboard(summary: dict) -> None:
     rows = summary.get("rows", [])
     if not rows:
         return
-    check_names = list(rows[0]["checks"].keys())
+    # Rows may carry different check sets (e.g. on_topic is optional).
+    check_names = sorted({name for r in rows for name in r["checks"]})
 
     print("\n" + "=" * 72)
     print(f"EVAL SCOREBOARD  |  model: {summary.get('model')}")

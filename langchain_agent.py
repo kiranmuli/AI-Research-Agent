@@ -81,6 +81,8 @@ def research(topic: str, model: str | None = None, verbose: bool = True):
     log(f"[langchain agent] researching: {topic}\n")
     report = ""
     read_pages: list[tuple[str, str]] = []
+    searched: list[tuple[str, str]] = []
+    seen: set[str] = set()
 
     for step in agent.stream(
         {"messages": [HumanMessage(content=topic)]},
@@ -103,9 +105,21 @@ def research(topic: str, model: str | None = None, verbose: bool = True):
                 report = last.content
         elif kind == "ToolMessage":
             log(f"  [result]  {last.name} -> {len(last.content)} chars")
+            # Collect the links the search surfaced, as fallback sources.
+            if last.name == "search_web":
+                for line in str(last.content).splitlines():
+                    parts = line.split(" | ")
+                    if len(parts) >= 2 and parts[1].strip().startswith("http"):
+                        title, url = parts[0].strip(), parts[1].strip()
+                        if url not in seen:
+                            seen.add(url)
+                            searched.append((title, url))
 
     log("\n[langchain agent] done.\n")
-    return report, read_pages
+    # Prefer pages actually read; fall back to the search results it saw, so the
+    # report never claims "No sources" when it did use search snippets.
+    sources = read_pages or searched[: config.MAX_SOURCES]
+    return report, sources
 
 
 def main() -> int:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import os
 import re
 from datetime import datetime
@@ -98,8 +99,10 @@ def _html_document(topic: str, body: str, sources: Sources) -> str:
     )
     source_items = ""
     if sources:
+        # Escape url/title: they come from web results and may contain HTML.
         rows = "".join(
-            f'<li><a href="{url}">{_ascii_safe(title)}</a></li>'
+            f'<li><a href="{html.escape(url)}">'
+            f"{html.escape(_ascii_safe(title))}</a></li>"
             for title, url in sources
         )
         source_items = f"<ol>{rows}</ol>"
@@ -110,7 +113,7 @@ def _html_document(topic: str, body: str, sources: Sources) -> str:
 <head><meta charset="utf-8"><style>{_PDF_CSS}</style></head>
 <body>
   <h1>Research Report</h1>
-  <p class="meta">{_ascii_safe(topic)}<br/>{_meta_line()}</p>
+  <p class="meta">{html.escape(_ascii_safe(topic))}<br/>{_meta_line()}</p>
   <hr/>
   {body_html}
   <h2>Sources</h2>
@@ -128,11 +131,14 @@ def save_markdown(topic: str, body: str, sources: Sources, base: str) -> str:
 
 def save_pdf(topic: str, body: str, sources: Sources, base: str) -> str | None:
     path = base + ".pdf"
-    html = _html_document(topic, body, sources)
-    with open(path, "wb") as fh:
-        result = pisa.CreatePDF(src=html, dest=fh, encoding="utf-8")
-    if result.err:
-        # Leave a broken/empty file behind? Remove it and signal failure.
+    html_doc = _html_document(topic, body, sources)
+    try:
+        with open(path, "wb") as fh:
+            result = pisa.CreatePDF(src=html_doc, dest=fh, encoding="utf-8")
+        if result.err:
+            raise RuntimeError("xhtml2pdf reported an error")
+    except Exception:
+        # Never leave a broken/empty .pdf behind on any failure path.
         if os.path.exists(path):
             os.remove(path)
         return None
