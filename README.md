@@ -104,6 +104,29 @@ observability ------------------------------------------
   tokens        : prompt=2132 output=914
 ```
 
+## Evals
+
+Measure quality instead of eyeballing PDFs. The eval harness runs the agent on
+a set of topics and auto-checks each report:
+
+```bash
+python evals.py                      # built-in test cases
+python evals.py --topic "..."        # one ad-hoc topic
+python evals.py --model llama3.2     # test a specific model
+```
+
+Each run is scored on: `no_error`, `has_report`, `read_2plus` (read ≥2 pages),
+`cites_sources` (uses `[n]` citations), and `on_topic`. It prints a scoreboard
+and saves JSON to `eval_results/`. Use it to compare models or prompt changes —
+e.g. run it on the local model now, then again after moving to a bigger model.
+
+```
+EVAL SCOREBOARD  |  model: llama3.2
+topic                               score    time  read  tok_out
+benefits of green tea             4/    5 186.5s     6      902
+overall checks passed: 4/5  (80%)
+```
+
 ## Use it from Claude (MCP server)
 
 You can plug this agent into **Claude Desktop** or **Claude Code** as an MCP

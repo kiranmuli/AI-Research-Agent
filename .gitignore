@@ -12,6 +12,7 @@ env/
 # Agent output
 reports/
 traces/
+eval_results/
 *.log
 
 # OS / editor
