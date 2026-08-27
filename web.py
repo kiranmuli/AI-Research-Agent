@@ -118,5 +118,8 @@ def _sse(event: str, data) -> str:
 
 
 if __name__ == "__main__":
-    print("AI Research Agent UI -> http://127.0.0.1:5000")
-    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
+    # Configurable so a container can bind 0.0.0.0; defaults stay local.
+    host = os.getenv("WEB_HOST", "127.0.0.1")
+    port = int(os.getenv("WEB_PORT", "5000"))
+    print(f"AI Research Agent UI -> http://{host}:{port}")
+    app.run(host=host, port=port, debug=False, threaded=True)

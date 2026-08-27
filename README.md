@@ -66,6 +66,26 @@ It prints each decision the agent makes (which tool it calls) so you can watch
 it think. Everything else in this README describes the hand-built version, which
 powers the CLI, web UI, and MCP server.
 
+## Run with Docker
+
+The web UI can run in a container. Ollama still runs on your host machine; the
+container reaches it at `host.docker.internal`.
+
+```bash
+docker compose up --build
+```
+
+Then open <http://127.0.0.1:5000>. Or without compose:
+
+```bash
+docker build -t ai-research-agent .
+docker run -p 5000:5000 --add-host host.docker.internal:host-gateway ai-research-agent
+```
+
+To point at a different Ollama host or model, pass env vars, e.g.
+`-e OLLAMA_MODEL=qwen3:8b`. The image is ~365MB and installs only the web UI's
+dependencies.
+
 ## Web UI
 
 Prefer a browser over the terminal? Run the web app:
