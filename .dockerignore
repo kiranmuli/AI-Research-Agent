@@ -15,3 +15,13 @@ eval_results/
 
 .vscode/
 .idea/
+
+# Dev-only
+.pytest_cache/
+.ruff_cache/
+tests/
+htmlcov/
+.coverage
+*.db
+*.sqlite3
+.github/

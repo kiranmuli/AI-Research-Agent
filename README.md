@@ -7,7 +7,18 @@ A local, privacy-friendly research agent. Give it a topic and it will:
 3. **Read** — fetch the top pages and extract their readable text.
 4. **Synthesize** — write a clear, cited Markdown report using only what it read.
 
-The LLM runs entirely on your machine through Ollama — no cloud API keys needed.
+The LLM backend is **pluggable**: run it fully locally with [Ollama](https://ollama.com)
+(no API keys), or point it at the **Anthropic** cloud API for production — the same
+agent runs unchanged against either.
+
+It ships two ways to run:
+
+- **Single-file / local** — a CLI, an MCP server, and a simple web UI (this is the
+  quick-start below).
+- **Production platform** — a horizontally-scalable stack with a REST API, API-key
+  auth, multi-tenancy, a background job queue, a Postgres-backed store, rate
+  limiting, structured logs, Prometheus metrics, and a one-command Docker
+  deployment. See **[Production deployment](#production-deployment-docker)**.
 
 ## Requirements
 
@@ -68,39 +79,16 @@ powers the CLI, web UI, and MCP server.
 
 ## Run with Docker
 
-### Fully self-contained (recommended)
+`docker compose up -d --build` brings up the full production stack (nginx, web,
+worker, Postgres, Redis, and Ollama with an automatic model pull). See
+**[Production deployment](#production-deployment-docker)** for the complete
+walkthrough, including switching to the Anthropic cloud model and minting API
+keys.
 
-`docker compose` runs **everything** — Ollama, the model download, and the web
-UI — so you need nothing installed except Docker:
-
-```bash
-docker compose up --build
-```
-
-This starts three services: `ollama` (the model server), `model-pull` (pulls
-the model into Ollama on first run, then exits), and `research-agent` (the web
-UI). The first run downloads the model (~2GB) into a named volume, so later runs
-start instantly. Open <http://127.0.0.1:5000> once it's up.
-
-Use a different model by setting `OLLAMA_MODEL`:
-
-```bash
-OLLAMA_MODEL=qwen3:8b docker compose up --build
-```
-
-Note: Ollama in Docker runs on CPU unless a GPU is configured, so responses are
-slower than a native GPU install.
-
-### App container only (use your host's Ollama)
-
-If you already run Ollama on your host, build just the app image:
-
-```bash
-docker build -t ai-research-agent .
-docker run -p 5000:5000 --add-host host.docker.internal:host-gateway ai-research-agent
-```
-
-The image is ~365MB and installs only the web UI's dependencies.
+The first run downloads the Ollama model (~2GB) into a named volume, so later
+runs start instantly. Ollama in Docker runs on CPU unless a GPU is configured,
+so responses are slower than a native GPU install — or set
+`LLM_PROVIDER=anthropic` to offload generation to the cloud.
 
 ## Web UI
 
@@ -114,6 +102,124 @@ Then open <http://127.0.0.1:5000>. Type a topic, click **Research**, and watch
 live progress stream in the page while it works. When it finishes you get the
 report on screen plus buttons to download the Markdown and PDF. Stop the server
 with `Ctrl + C`.
+
+> The web UI and REST API share one background job queue, so they need Redis, a
+> database, and at least one worker running. The easiest way to get all of that
+> is the Docker stack below; for running the pieces by hand see
+> [Running the platform without Docker](#running-the-platform-without-docker).
+
+## Production deployment (Docker)
+
+The production stack runs on a single VM with one command. It brings up:
+
+| Service | Role |
+|---|---|
+| **nginx** | TLS-terminating reverse proxy, SSE-aware (buffering off, long timeouts) |
+| **web** (gunicorn) | REST API + browser UI + auth + rate limiting |
+| **worker** (RQ) | Runs research jobs off the request thread |
+| **postgres** | Durable store: tenants, API keys, jobs, reports, traces |
+| **redis** | Job queue + live-progress pub/sub + rate-limit storage |
+| **ollama** | Local model server (skip when using the Anthropic provider) |
+
+```
+Client ─► nginx ─► gunicorn/Flask ──enqueue──► Redis ──► RQ worker ──► LLM
+                        │  subscribe progress ◄────────────┘   │
+                        └──────────── Postgres ◄───────────────┘
+```
+
+### 1. Configure
+
+```bash
+cp .env.example .env
+# Set a strong SECRET_KEY, DB password, and choose the LLM provider.
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # SECRET_KEY
+```
+
+To use the cloud model instead of Ollama, set in `.env`:
+
+```env
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-5
+```
+
+### 2. Launch
+
+```bash
+docker compose up -d --build
+```
+
+Migrations run automatically on the web container's start. The app is served
+through nginx at <http://localhost:8080> (change with `HTTP_PORT`). Check health:
+
+```bash
+curl http://localhost:8080/healthz     # liveness
+curl http://localhost:8080/readyz      # DB + Redis readiness
+curl http://localhost:8080/metrics     # Prometheus metrics
+```
+
+### 3. Create a tenant + API key
+
+The REST API requires an API key (`REQUIRE_API_KEY=true`). Mint one:
+
+```bash
+docker compose exec web python -m app.cli create-tenant "Acme Corp"
+docker compose exec web python -m app.cli create-key --tenant <tenant_id> --name prod
+# -> prints the raw key ONCE. Store it now.
+```
+
+Put nginx behind TLS (a certificate on the host, or a proxy like Caddy/Traefik)
+before exposing it to the internet.
+
+## REST API
+
+All `/api/v1` endpoints are tenant-scoped. Authenticate with
+`Authorization: Bearer <api-key>` (or `X-API-Key: <api-key>`).
+
+| Method & path | Description |
+|---|---|
+| `POST /api/v1/research` | Enqueue a job. Body: `{"topic": "...", "provider"?, "model"?}`. Returns `202` + job. |
+| `GET /api/v1/research` | List this tenant's jobs (`?limit=&offset=`). |
+| `GET /api/v1/research/{id}` | Job status + metadata. |
+| `GET /api/v1/research/{id}/report` | Full report (markdown, html, sources, trace) once ready. |
+| `GET /api/v1/research/{id}/report.md` | Download Markdown. |
+| `GET /api/v1/research/{id}/report.pdf` | Download PDF (rendered on demand). |
+| `GET /api/v1/research/{id}/stream` | Live progress via Server-Sent Events. |
+
+```bash
+KEY=rak_your_key_here
+
+# Start a job
+curl -s -X POST http://localhost:8080/api/v1/research \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"topic":"impact of caffeine on sleep"}'
+
+# Poll status, then fetch the report
+curl -s http://localhost:8080/api/v1/research/$ID \
+  -H "Authorization: Bearer $KEY"
+curl -s http://localhost:8080/api/v1/research/$ID/report \
+  -H "Authorization: Bearer $KEY"
+```
+
+Rate limits apply per API key (default `60/min`, `10/min` for job creation) and
+are configurable via `RATE_LIMIT_DEFAULT` / `RATE_LIMIT_RESEARCH`.
+
+## Running the platform without Docker
+
+You need Postgres and Redis reachable. Then, in separate terminals:
+
+```bash
+pip install -e ".[dev]"
+export DATABASE_URL=postgresql+psycopg://research:research@localhost:5432/research
+export REDIS_URL=redis://localhost:6379/0
+
+alembic upgrade head            # create the schema
+python -m app.jobs.worker       # terminal 1: the worker
+python web.py                   # terminal 2: the web app (waitress)
+```
+
+For a zero-infrastructure spin-up (SQLite, no queue), the CLI can still run a
+single job inline: `python -m app.cli research "your topic"`.
 
 ## Observability
 
@@ -208,12 +314,23 @@ claude mcp add ai-research-agent -- python mcp_server.py
 
 ## Configuration
 
-Behaviour is controlled by environment variables (see `config.py` for defaults):
+All configuration is validated at startup (see `app/settings.py`) and read from
+environment variables or a `.env` file. Key settings:
 
 | Variable | Default | Description |
 |---|---|---|
+| `LLM_PROVIDER` | `ollama` | LLM backend: `ollama` or `anthropic` |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `llama3.2` | Model to use |
+| `OLLAMA_MODEL` | `llama3.2` | Ollama model to use |
+| `ANTHROPIC_API_KEY` | — | Required when `LLM_PROVIDER=anthropic` |
+| `ANTHROPIC_MODEL` | `claude-sonnet-5` | Cloud model to use |
+| `DATABASE_URL` | `postgresql+psycopg://…` | SQLAlchemy database URL |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis for queue + pub/sub + limits |
+| `SECRET_KEY` | `dev-insecure…` | **Override in production** |
+| `REQUIRE_API_KEY` | `true` | Require an API key on the REST API |
+| `RATE_LIMIT_DEFAULT` | `60/minute` | Default per-key/IP rate limit |
+| `RATE_LIMIT_RESEARCH` | `10/minute` | Rate limit for job creation |
+| `LOG_JSON` | `true` | JSON logs (`false` = pretty console) |
 | `RESEARCH_SEARCH_RESULTS` | `5` | Results per search query |
 | `RESEARCH_SUBQUESTIONS` | `3` | Sub-queries the planner generates |
 | `RESEARCH_MAX_SOURCES` | `6` | Max pages fetched per run |
@@ -223,24 +340,53 @@ Behaviour is controlled by environment variables (see `config.py` for defaults):
 
 ```
 AI-Research-Agent/
-├── main.py                 # CLI entry point
-├── web.py                  # Web UI (Flask, live progress)
-├── mcp_server.py           # MCP server (use the agent from Claude)
-├── templates/index.html    # Web UI page
-├── config.py               # Configuration + env overrides
-├── requirements.txt
-└── research_agent/
-    ├── agent.py            # Orchestration: plan -> search -> read -> synthesize
-    ├── singletons.py       # Shared, reused LLM + agent instances
-    ├── trace.py            # Local observability (timings, tokens, metrics)
-    ├── llm.py              # Local Ollama client
-    ├── search.py           # DuckDuckGo web search
-    ├── fetch.py            # URL fetch + text extraction
-    └── report.py           # Markdown report writer
+├── wsgi.py                    # Production WSGI entrypoint (gunicorn)
+├── web.py                     # Local web runner (waitress)
+├── main.py                    # Legacy CLI entry point
+├── mcp_server.py              # MCP server (use the agent from Claude)
+├── config.py                  # Backward-compat facade over app.settings
+├── pyproject.toml             # Packaging, deps, tooling
+├── alembic.ini / migrations/  # Database migrations
+├── docker-compose.yml         # Full stack for a single VM
+├── Dockerfile                 # Multi-stage, non-root runtime image
+├── deploy/                    # gunicorn, nginx, entrypoint
+├── templates/index.html       # Browser UI page
+├── tests/                     # pytest suite (SQLite + fakeredis, no network)
+│
+├── app/                       # Production application
+│   ├── settings.py            # Validated configuration (pydantic-settings)
+│   ├── cli.py                 # Admin CLI (tenants, keys, init-db, research)
+│   ├── llm/                   # Pluggable providers: base, ollama, anthropic, factory
+│   ├── db/                    # SQLAlchemy models, sessions, repository
+│   ├── auth/                  # API-key generation/hashing + request guard
+│   ├── jobs/                  # Redis/RQ queue, worker, live-progress pub/sub
+│   ├── observability/         # structlog logging + Prometheus metrics
+│   └── api/                   # Flask factory: REST API, UI, health, errors
+│
+└── research_agent/            # Core domain logic (LLM-agnostic)
+    ├── agent.py               # Orchestration: plan -> search -> read -> synthesize
+    ├── singletons.py          # Shared, reused provider + agent instances
+    ├── trace.py               # Per-run observability (timings, tokens, metrics)
+    ├── search.py              # DuckDuckGo web search
+    ├── fetch.py               # URL fetch + text extraction
+    └── report.py              # Markdown / HTML / PDF rendering
 ```
+
+## Testing & CI
+
+```bash
+pip install -e ".[dev]"
+pytest              # runs fully offline (SQLite + fakeredis + stub LLM)
+ruff check .        # lint
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs lint, tests, a migration check,
+and a Docker build on every push and PR.
 
 ## How it works
 
 The agent is a simple, transparent pipeline rather than a black box — each stage
-lives in its own module so you can swap the search backend, change the model, or
-adjust how sources are read without touching the rest.
+lives in its own module. The production layers (`app/`) wrap that core without
+changing it: the agent depends only on a small `LLMProvider` interface, so the
+same pipeline runs against a local Ollama model or the Anthropic cloud API, from
+the CLI, the web UI, the REST API, or an MCP client.

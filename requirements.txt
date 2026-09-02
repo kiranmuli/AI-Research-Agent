@@ -1,13 +1,41 @@
-ollama>=0.3.0
+# Pinned-ish runtime dependencies. The authoritative list (with dev/optional
+# extras) lives in pyproject.toml — install with `pip install .` (or `-e .[dev]`).
+# This file is kept for environments that prefer `pip install -r`.
+
+# --- core agent ---
 ddgs>=6.0.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
-mcp>=1.2.0
 markdown>=3.5
 xhtml2pdf>=0.2.11
-flask>=3.0
 
-# Optional — only needed for the alternative LangChain version
-# (langchain_agent.py). The core agent does not use these.
-langchain-ollama>=0.2
-langgraph>=0.2
+# --- LLM providers ---
+ollama>=0.3.0
+anthropic>=0.39
+
+# --- web / API ---
+flask>=3.0
+gunicorn>=21.2 ; platform_system != "Windows"
+waitress>=3.0 ; platform_system == "Windows"
+flask-limiter>=3.5
+
+# --- persistence ---
+SQLAlchemy>=2.0
+alembic>=1.13
+psycopg[binary]>=3.1
+
+# --- queue / cache ---
+redis>=5.0
+rq>=1.16
+
+# --- config / observability ---
+pydantic>=2.6
+pydantic-settings>=2.2
+structlog>=24.1
+prometheus-client>=0.20
+
+# --- optional: alternative LangChain agent (langchain_agent.py) ---
+# langchain-ollama>=0.2
+# langgraph>=0.2
+# --- optional: MCP server (mcp_server.py) ---
+# mcp>=1.2.0

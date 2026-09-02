@@ -1,125 +1,35 @@
-"""Simple web UI for the AI Research Agent.
+"""Local runner for the web app.
 
-Run:  python web.py   then open http://127.0.0.1:5000
+For development/convenience: builds the production Flask app (via the factory)
+and serves it. In production the app is served by gunicorn (see wsgi.py and
+deploy/gunicorn.conf.py), fronted by nginx.
 
-The browser sends a topic, the server runs the agent in a background thread and
-streams live progress back with Server-Sent Events (SSE), then shows the report
-with links to download the generated Markdown and PDF.
+    python web.py
+
+Requires Redis and a database to be reachable, and at least one worker running
+(``python -m app.jobs.worker``) to actually process jobs.
 """
 
 from __future__ import annotations
 
-import json
-import logging
 import os
-import queue
-import threading
 
-import markdown as _markdown
-from flask import (
-    Flask,
-    Response,
-    render_template,
-    request,
-    send_from_directory,
-)
+from app.api import create_app
+from app.settings import get_settings
 
-import config
-from research_agent.report import save_report
-from research_agent.singletons import get_agent
-from research_agent.trace import save_trace
-
-app = Flask(__name__)
-
-# Quiet Flask's per-request HTTP lines ("GET /research ... 200") so the agent's
-# own step-by-step logs are the only thing shown in the terminal.
-logging.getLogger("werkzeug").setLevel(logging.ERROR)
-
-
-@app.route("/")
-def index():
-    return render_template("index.html", model=config.OLLAMA_MODEL)
-
-
-@app.route("/research")
-def research():
-    topic = (request.args.get("topic") or "").strip()
-
-    def generate():
-        if not topic:
-            yield _sse("error", "Please enter a topic to research.")
-            return
-
-        q: queue.Queue = queue.Queue()
-
-        def sink(line: str) -> None:
-            q.put(("log", line))
-
-        def worker() -> None:
-            try:
-                agent = get_agent()
-                ok, msg = agent.llm.is_available()
-                if not ok:
-                    q.put(("error", msg))
-                    return
-                result = agent.research(topic, verbose=True, log_sink=sink)
-
-                sources = [(s.title, s.url) for s in result.sources]
-                md_path, pdf_path = save_report(
-                    result.topic, result.report, sources
-                )
-                if result.trace:
-                    save_trace(result.trace)
-                report_html = _markdown.markdown(
-                    result.report,
-                    extensions=["extra", "sane_lists", "nl2br"],
-                )
-                q.put(
-                    (
-                        "done",
-                        {
-                            "report_html": report_html,
-                            "md": os.path.basename(md_path),
-                            "pdf": os.path.basename(pdf_path) if pdf_path else None,
-                            "sources": sources,
-                            "trace": result.trace,
-                        },
-                    )
-                )
-            except Exception as exc:  # noqa: BLE001 - surface any error to the UI
-                q.put(("error", str(exc)))
-            finally:
-                q.put(("end", None))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-        while True:
-            kind, data = q.get()
-            if kind == "end":
-                break
-            yield _sse(kind, data)
-
-    headers = {
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",  # disable proxy buffering for live streaming
-    }
-    return Response(generate(), mimetype="text/event-stream", headers=headers)
-
-
-@app.route("/download/<path:name>")
-def download(name: str):
-    return send_from_directory(
-        os.path.abspath(config.REPORTS_DIR), name, as_attachment=True
-    )
-
-
-def _sse(event: str, data) -> str:
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+app = create_app()
 
 
 if __name__ == "__main__":
-    # Configurable so a container can bind 0.0.0.0; defaults stay local.
-    host = os.getenv("WEB_HOST", "127.0.0.1")
-    port = int(os.getenv("WEB_PORT", "5000"))
-    print(f"AI Research Agent UI -> http://{host}:{port}")
-    app.run(host=host, port=port, debug=False, threaded=True)
+    s = get_settings()
+    host = os.getenv("WEB_HOST", s.web_host)
+    port = int(os.getenv("WEB_PORT", str(s.web_port)))
+    print(f"AI Research Agent -> http://{host}:{port}")
+
+    try:
+        # Prefer waitress (a production-grade WSGI server that runs on Windows).
+        from waitress import serve
+
+        serve(app, host=host, port=port, threads=16)
+    except ImportError:
+        app.run(host=host, port=port, debug=False, threaded=True)

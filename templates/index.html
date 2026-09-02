@@ -88,7 +88,7 @@
     <header>
       <h1>🔎 AI Research Agent</h1>
       <p>Type a topic. It searches the web, reads the pages, and writes a cited
-         report — powered locally by Ollama (<code>{{ model }}</code>).</p>
+         report — <code>{{ provider }}</code> / <code>{{ model }}</code>.</p>
     </header>
 
     <div class="card">
@@ -197,9 +197,9 @@
         const data = JSON.parse(ev.data);
         renderStats(data.trace);
         reportEl.innerHTML = data.report_html;
-        dlMd.href = '/download/' + data.md;
+        dlMd.href = data.md;
         dlPdf.style.display = data.pdf ? '' : 'none';
-        if (data.pdf) dlPdf.href = '/download/' + data.pdf;
+        if (data.pdf) dlPdf.href = data.pdf;
         resultEl.classList.add('show');
         setRunning(false);
         statusEl.classList.remove('show');

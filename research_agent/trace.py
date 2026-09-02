@@ -70,7 +70,8 @@ def save_trace(summary: dict) -> str:
     """Write a trace summary to traces/<timestamp>-<slug>.json; return the path."""
     os.makedirs(config.TRACES_DIR, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(config.TRACES_DIR, f"{stamp}-{_slug(summary.get('topic',''))}.json")
+    name = f"{stamp}-{_slug(summary.get('topic', ''))}.json"
+    path = os.path.join(config.TRACES_DIR, name)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(summary, fh, indent=2)
     return path

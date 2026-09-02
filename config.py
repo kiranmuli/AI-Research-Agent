@@ -1,35 +1,31 @@
-"""Central configuration for the AI Research Agent.
+"""Backward-compatible flat configuration facade.
 
-Values can be overridden with environment variables so nothing is hard-coded
-for a particular machine.
+Historically the codebase used ``import config; config.OLLAMA_MODEL``. The real,
+validated configuration now lives in :mod:`app.settings`; this module re-exports
+those values under the original names so existing imports keep working.
+
+Prefer ``from app.settings import get_settings`` in new code.
 """
 
-import os
+from app.settings import get_settings
 
-# --- Ollama (local LLM) ---
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+_s = get_settings()
+
+# --- LLM (active provider) ---
+OLLAMA_HOST = _s.ollama_host
+OLLAMA_MODEL = _s.ollama_model
+LLM_PROVIDER = _s.llm_provider
 
 # --- Research behaviour ---
-# How many web results to pull per search query.
-SEARCH_RESULTS = int(os.getenv("RESEARCH_SEARCH_RESULTS", "5"))
-# How many sub-questions the planner generates for a topic.
-NUM_SUBQUESTIONS = int(os.getenv("RESEARCH_SUBQUESTIONS", "3"))
-# Max pages actually fetched and read across the whole run.
-MAX_SOURCES = int(os.getenv("RESEARCH_MAX_SOURCES", "6"))
-# Max characters of extracted page text fed to the model per source.
-MAX_SOURCE_CHARS = int(os.getenv("RESEARCH_MAX_SOURCE_CHARS", "6000"))
+SEARCH_RESULTS = _s.search_results
+NUM_SUBQUESTIONS = _s.num_subquestions
+MAX_SOURCES = _s.max_sources
+MAX_SOURCE_CHARS = _s.max_source_chars
 
 # --- Networking ---
-HTTP_TIMEOUT = int(os.getenv("RESEARCH_HTTP_TIMEOUT", "20"))
-USER_AGENT = os.getenv(
-    "RESEARCH_USER_AGENT",
-    "AI-Research-Agent/0.1 (+https://github.com/kiranmuli/AI-Research-Agent)",
-)
+HTTP_TIMEOUT = _s.http_timeout
+USER_AGENT = _s.user_agent
 
 # --- Output ---
-REPORTS_DIR = os.getenv("RESEARCH_REPORTS_DIR", "reports")
-
-# --- Observability ---
-# Where per-run JSON traces (timings, token counts, step metrics) are written.
-TRACES_DIR = os.getenv("RESEARCH_TRACES_DIR", "traces")
+REPORTS_DIR = _s.reports_dir
+TRACES_DIR = _s.traces_dir

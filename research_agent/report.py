@@ -28,9 +28,12 @@ def _base_path(topic: str) -> str:
 
 
 def _meta_line() -> str:
+    from app.settings import get_settings
+
+    s = get_settings()
     return (
         f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} "
-        f"| model: {config.OLLAMA_MODEL}"
+        f"| model: {s.active_model()} ({s.llm_provider})"
     )
 
 
@@ -120,6 +123,33 @@ def _html_document(topic: str, body: str, sources: Sources) -> str:
   {source_items}
 </body>
 </html>"""
+
+
+def build_markdown_document(topic: str, body: str, sources: Sources) -> str:
+    """Return the full Markdown report as a string (no file written)."""
+    return _markdown_document(topic, body, sources)
+
+
+def render_report_html(body: str) -> str:
+    """Render the report body Markdown to HTML for display/storage."""
+    return _markdown.markdown(
+        body, extensions=["extra", "sane_lists", "nl2br"]
+    )
+
+
+def render_pdf_bytes(topic: str, body: str, sources: Sources) -> bytes | None:
+    """Render a PDF to bytes (no file written); ``None`` on failure."""
+    import io
+
+    html_doc = _html_document(topic, body, sources)
+    buffer = io.BytesIO()
+    try:
+        result = pisa.CreatePDF(src=html_doc, dest=buffer, encoding="utf-8")
+        if result.err:
+            return None
+    except Exception:  # noqa: BLE001 - PDF is a nice-to-have, never fatal
+        return None
+    return buffer.getvalue()
 
 
 def save_markdown(topic: str, body: str, sources: Sources, base: str) -> str:

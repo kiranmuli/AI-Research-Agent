@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import config
+from app.llm import LLMProvider, get_provider
 from research_agent.fetch import fetch_text
-from research_agent.llm import LLM
 from research_agent.logger import StepLogger
 from research_agent.search import SearchResult, web_search
 from research_agent.trace import RunTrace
@@ -46,12 +46,12 @@ SYNTHESIS_SYSTEM = (
 
 
 class ResearchAgent:
-    def __init__(self, llm: LLM | None = None):
-        self.llm = llm or LLM()
+    def __init__(self, llm: LLMProvider | None = None):
+        self.llm = llm or get_provider()
 
     def plan(self, topic: str, log: StepLogger, trace: RunTrace) -> list[str]:
         """Ask the LLM for a handful of focused search queries."""
-        log.info(f"model: {self.llm.model}  (via Ollama)")
+        log.info(f"model: {self.llm.model}  (via {self.llm.provider_name})")
         log.wait("asking the model to draft search queries...")
         raw, tokens = self.llm.chat_with_tokens(
             system=PLANNER_SYSTEM,
