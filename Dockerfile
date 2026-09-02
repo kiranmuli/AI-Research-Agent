@@ -37,7 +37,11 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 COPY . .
-RUN chmod +x deploy/entrypoint.sh && chown -R appuser:appuser /app
+# Normalize the entrypoint to LF (Windows checkouts may introduce CRLF, which
+# breaks the shebang) and make it executable.
+RUN sed -i 's/\r$//' deploy/entrypoint.sh \
+    && chmod +x deploy/entrypoint.sh \
+    && chown -R appuser:appuser /app
 
 USER appuser
 EXPOSE 5000
