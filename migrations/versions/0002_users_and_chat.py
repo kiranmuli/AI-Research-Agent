@@ -29,19 +29,19 @@ def upgrade() -> None:
     )
     op.create_index("ix_users_tenant_id", "users", ["tenant_id"])
 
-    op.add_column(
-        "research_jobs",
-        sa.Column("user_id", sa.String(length=32), nullable=True),
-    )
-    op.create_index("ix_research_jobs_user_id", "research_jobs", ["user_id"])
-    op.create_foreign_key(
-        "fk_research_jobs_user_id",
-        "research_jobs",
-        "users",
-        ["user_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
+    # Batch mode so the ALTER works on SQLite (CI) as well as Postgres.
+    with op.batch_alter_table("research_jobs", schema=None) as batch_op:
+        batch_op.add_column(
+            sa.Column("user_id", sa.String(length=32), nullable=True)
+        )
+        batch_op.create_index("ix_research_jobs_user_id", ["user_id"])
+        batch_op.create_foreign_key(
+            "fk_research_jobs_user_id",
+            "users",
+            ["user_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
 
     op.create_table(
         "conversations",
@@ -94,11 +94,12 @@ def downgrade() -> None:
     op.drop_index("ix_conversations_user_id", table_name="conversations")
     op.drop_table("conversations")
 
-    op.drop_constraint(
-        "fk_research_jobs_user_id", "research_jobs", type_="foreignkey"
-    )
-    op.drop_index("ix_research_jobs_user_id", table_name="research_jobs")
-    op.drop_column("research_jobs", "user_id")
+    with op.batch_alter_table("research_jobs", schema=None) as batch_op:
+        batch_op.drop_constraint(
+            "fk_research_jobs_user_id", type_="foreignkey"
+        )
+        batch_op.drop_index("ix_research_jobs_user_id")
+        batch_op.drop_column("user_id")
 
     op.drop_index("ix_users_tenant_id", table_name="users")
     op.drop_table("users")
