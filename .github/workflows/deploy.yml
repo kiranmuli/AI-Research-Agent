@@ -29,4 +29,7 @@ jobs:
             git checkout main
             git pull --ff-only
             docker compose up -d --build
+            # Recreating the web container gives it a new address; restart nginx
+            # so it re-resolves the upstream and doesn't 502 after a deploy.
+            docker compose restart nginx
             docker image prune -f
