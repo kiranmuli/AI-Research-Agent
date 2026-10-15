@@ -29,6 +29,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-research}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-research}
       POSTGRES_DB: ${POSTGRES_DB:-research}
+    # Expose Postgres to the host so DB tools (pgAdmin, DBeaver, ...) can connect.
+    # Override the host port with POSTGRES_PORT if 5432 is already in use locally.
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
