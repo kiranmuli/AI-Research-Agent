@@ -56,6 +56,38 @@ class Tenant(Base):
     jobs: Mapped[list[ResearchJob]] = relationship(
         back_populates="tenant", cascade="all, delete-orphan"
     )
+    users: Mapped[list[User]] = relationship(
+        back_populates="tenant", cascade="all, delete-orphan"
+    )
+
+
+class User(Base):
+    """A human end-user who signs in through the browser.
+
+    Each user belongs to a tenant (their own, created at sign-up) so all the
+    existing tenant-scoped data access keeps working unchanged. Passwords are
+    stored only as a salted PBKDF2 hash (see ``app.webapp.security``).
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    tenant_id: Mapped[str] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, nullable=False
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    tenant: Mapped[Tenant] = relationship(back_populates="users")
+    conversations: Mapped[list[Conversation]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class ApiKey(Base):
@@ -94,6 +126,10 @@ class ResearchJob(Base):
     tenant_id: Mapped[str] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    # The signed-in user who started this job (null for API-key / legacy jobs).
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     topic: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), default=JobStatus.QUEUED.value, index=True, nullable=False
@@ -120,6 +156,9 @@ class ResearchJob(Base):
         back_populates="job", cascade="all, delete-orphan", uselist=False
     )
     tenant: Mapped[Tenant] = relationship(back_populates="jobs")
+    conversations: Mapped[list[Conversation]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
 
 
 class Report(Base):
@@ -141,3 +180,60 @@ class Report(Base):
     )
 
     job: Mapped[ResearchJob] = relationship(back_populates="report")
+
+
+class ChatRole(str, enum.Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
+class Conversation(Base):
+    """A chat thread grounded on one research report.
+
+    Each conversation hangs off the job whose report it discusses, so the chat
+    always has concrete source material to answer from.
+    """
+
+    __tablename__ = "conversations"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("research_jobs.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, index=True, nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="conversations")
+    job: Mapped[ResearchJob] = relationship(back_populates="conversations")
+    messages: Mapped[list[ChatMessage]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at",
+    )
+
+
+class ChatMessage(Base):
+    """A single turn in a conversation (a user question or an assistant reply)."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, index=True, nullable=False
+    )
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")

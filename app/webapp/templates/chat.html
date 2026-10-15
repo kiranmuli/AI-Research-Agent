@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Chat · {{ job.topic }}{% endblock %}
+{% block content %}
+<a class="back" href="/research/{{ job.id }}">← Back to report</a>
+<h1 class="report-title">💬 {{ job.topic }}</h1>
+<p class="muted">Answers are grounded only on this report.</p>
+
+<section class="chat" id="chat">
+  {% for m in messages %}
+  <div class="msg msg-{{ m.role }}">{{ m.content }}</div>
+  {% endfor %}
+  {% if not messages %}
+  <div class="msg msg-assistant">Ask me anything about this report.</div>
+  {% endif %}
+</section>
+
+<form class="chat-form" id="chat-form">
+  <input type="text" id="chat-input" placeholder="Ask a follow-up question…"
+         maxlength="2000" autocomplete="off" required autofocus />
+  <button type="submit" class="primary" id="chat-send">Send</button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const convoId = {{ conversation_id | tojson }};
+  const chat = document.getElementById("chat");
+  const form = document.getElementById("chat-form");
+  const input = document.getElementById("chat-input");
+  const send = document.getElementById("chat-send");
+
+  function addMsg(role, text) {
+    const div = document.createElement("div");
+    div.className = "msg msg-" + role;
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+    addMsg("user", question);
+    input.value = "";
+    input.disabled = send.disabled = true;
+    const thinking = addMsg("assistant", "…");
+    try {
+      const res = await fetch(`/api/chat/${convoId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: question }),
+      });
+      const data = await res.json();
+      thinking.textContent = res.ok ? data.answer : (data.error || "Something went wrong.");
+    } catch (_) {
+      thinking.textContent = "Network error — please try again.";
+    } finally {
+      input.disabled = send.disabled = false;
+      input.focus();
+    }
+  });
+</script>
+{% endblock %}
