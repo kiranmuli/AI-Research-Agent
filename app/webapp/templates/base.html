@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}AI Research Agent{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">🔎 Research Agent</a>
+    <nav>
+      {% if user %}
+        <span class="who">{{ user.email }}</span>
+        <form action="/logout" method="post" class="inline">
+          <button class="link" type="submit">Log out</button>
+        </form>
+      {% else %}
+        <a href="/login">Log in</a>
+      {% endif %}
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

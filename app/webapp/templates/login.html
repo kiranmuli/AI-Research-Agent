@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Log in · Research Agent{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>Welcome back</h1>
+  <p class="muted">Log in to run research and chat with your reports.</p>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next }}" />
+    <label>Email
+      <input type="email" name="email" autocomplete="username" required autofocus />
+    </label>
+    <label>Password
+      <input type="password" name="password" autocomplete="current-password" required />
+    </label>
+    <button type="submit" class="primary">Log in</button>
+  </form>
+  {% if allow_signup %}
+  <p class="muted">No account? <a href="/signup?next={{ next }}">Create one</a>.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Research Agent{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Research anything</h1>
+  <p class="muted">Enter a topic and the agent will search the web, read sources,
+    and write you a cited report. Then chat with it.</p>
+  <form method="post" action="/research" class="research-form">
+    <input type="text" name="topic" placeholder="e.g. health benefits of green tea"
+           maxlength="500" required autofocus />
+    <input type="text" name="model" placeholder="model (optional, e.g. {{ default_model }})"
+           class="model-input" />
+    <button type="submit" class="primary">Research</button>
+  </form>
+</section>
+
+<section class="history">
+  <h2>Your searches <span class="count">{{ total }}</span></h2>
+  {% if jobs %}
+  <ul class="job-list">
+    {% for job in jobs %}
+    <li>
+      <a href="/research/{{ job.id }}" class="job-row">
+        <span class="job-topic">{{ job.topic }}</span>
+        <span class="job-meta">
+          <span class="badge badge-{{ job.status }}">{{ job.status }}</span>
+          <span class="muted">{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '' }}</span>
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted empty">No searches yet — run your first one above.</p>
+  {% endif %}
+</section>
+{% endblock %}

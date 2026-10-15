@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ job.topic }} · Research Agent{% endblock %}
+{% block content %}
+<a class="back" href="/">← Dashboard</a>
+<h1 class="report-title">{{ job.topic }}</h1>
+<div class="report-head">
+  <span class="badge badge-{{ job.status }}">{{ job.status }}</span>
+  {% if job.model %}<span class="muted">model: {{ job.model }}</span>{% endif %}
+</div>
+
+{% if not done %}
+<section class="progress" id="progress">
+  <div class="spinner"></div>
+  <h2>Working on it…</h2>
+  <p class="muted">The agent is planning, searching, reading, and writing. This can
+    take a few minutes on a local model.</p>
+  <pre id="log" class="log"></pre>
+</section>
+{% elif job.status == 'failed' %}
+<div class="alert">This research failed: {{ job.error or 'unknown error' }}</div>
+{% elif report %}
+<section class="actions">
+  <a class="btn" href="/chat/{{ job.id }}">💬 Chat about this report</a>
+  <a class="btn" href="/research/{{ job.id }}/report.md">⬇ Markdown</a>
+  <a class="btn" href="/research/{{ job.id }}/report.pdf">⬇ PDF</a>
+</section>
+{% if trace %}
+<section class="stats">
+  {% if trace.get('total_time') %}<div class="stat"><b>{{ '%.1f'|format(trace.get('total_time')) }}s</b><span>total</span></div>{% endif %}
+  <div class="stat"><b>{{ job.num_sources }}</b><span>sources</span></div>
+  {% if trace.get('tokens') %}<div class="stat"><b>{{ trace.get('tokens', {}).get('output', '–') }}</b><span>output tokens</span></div>{% endif %}
+</section>
+{% endif %}
+<article class="report">{{ report.html | safe }}</article>
+{% if report.sources %}
+<section class="sources">
+  <h2>Sources</h2>
+  <ol>
+    {% for src in report.sources %}
+    <li><a href="{{ src[1] }}" target="_blank" rel="noopener noreferrer">{{ src[0] or src[1] }}</a></li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+{% else %}
+<p class="muted">Report not available.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not done %}
+<script>
+  const jobId = {{ job.id | tojson }};
+  const log = document.getElementById("log");
+  const es = new EventSource(`/api/research/${jobId}/stream`);
+  es.addEventListener("log", (e) => {
+    try { log.textContent += JSON.parse(e.data) + "\n"; } catch (_) {}
+    log.scrollTop = log.scrollHeight;
+  });
+  const finish = () => { es.close(); setTimeout(() => location.reload(), 600); };
+  es.addEventListener("done", finish);
+  es.addEventListener("error", (e) => {
+    // A terminal "error" app-event or a dropped connection: reload to show state.
+    if (es.readyState === EventSource.CLOSED) location.reload();
+  });
+  es.addEventListener("end", finish);
+</script>
+{% endif %}
+{% endblock %}

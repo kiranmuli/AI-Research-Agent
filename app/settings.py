@@ -83,6 +83,20 @@ class Settings(BaseSettings):
     # always reachable (it is meant for humans behind your own network/proxy).
     require_api_key: bool = True
 
+    # Browser login sessions (signed cookie). The signing key defaults to
+    # ``secret_key`` so a single SECRET_KEY configures everything.
+    session_cookie_name: str = "ragent_session"
+    session_max_age: int = 60 * 60 * 24 * 14  # 14 days
+    # Set true only when served strictly over HTTPS (secure-flag on the cookie).
+    session_cookie_secure: bool = False
+    # Allow self-service sign-up from the login page. Disable to lock the app
+    # down to users you create manually via the CLI.
+    allow_signup: bool = True
+
+    # --- chat ---
+    chat_history_turns: int = 8  # prior turns fed back into a chat prompt
+    chat_max_message_len: int = 2000
+
     # --- observability ---
     log_level: str = "INFO"
     log_json: bool = True

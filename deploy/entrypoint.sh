@@ -32,7 +32,12 @@ case "$ROLE" in
     echo "running migrations..."
     alembic upgrade head
     echo "starting web server..."
-    exec gunicorn -c deploy/gunicorn.conf.py wsgi:app
+    exec uvicorn asgi:app \
+      --host 0.0.0.0 \
+      --port "${WEB_PORT:-5000}" \
+      --workers "${WEB_CONCURRENCY:-2}" \
+      --timeout-keep-alive 75 \
+      --proxy-headers
     ;;
   worker)
     wait_for_db

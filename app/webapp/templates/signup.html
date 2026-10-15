@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Sign up · Research Agent{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>Create your account</h1>
+  <p class="muted">Your research and chats stay private to your account.</p>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/signup">
+    <input type="hidden" name="next" value="{{ next }}" />
+    <label>Email
+      <input type="email" name="email" autocomplete="username" required autofocus />
+    </label>
+    <label>Password
+      <input type="password" name="password" autocomplete="new-password"
+             minlength="8" required />
+      <small class="muted">At least 8 characters.</small>
+    </label>
+    <button type="submit" class="primary">Sign up</button>
+  </form>
+  <p class="muted">Already have an account? <a href="/login?next={{ next }}">Log in</a>.</p>
+</div>
+{% endblock %}
