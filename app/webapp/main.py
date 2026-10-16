@@ -20,7 +20,7 @@ from app.observability.metrics import (
 )
 from app.settings import get_settings
 from app.webapp.deps import LoginRequired
-from app.webapp.routers import auth, chat, pages, research
+from app.webapp.routers import assistant, auth, chat, pages, research
 
 log = get_logger(__name__)
 
@@ -50,6 +50,7 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     app.include_router(auth.router)
+    app.include_router(assistant.router)
     app.include_router(pages.router)
     app.include_router(research.router)
     app.include_router(chat.router)

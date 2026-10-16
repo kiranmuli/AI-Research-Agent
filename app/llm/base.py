@@ -8,6 +8,7 @@ unchanged against a local model or a hosted API.
 from __future__ import annotations
 
 import abc
+from collections.abc import Iterator
 
 
 class LLMProvider(abc.ABC):
@@ -35,6 +36,30 @@ class LLMProvider(abc.ABC):
         """Convenience wrapper returning only the assistant text."""
         text, _ = self.chat_with_tokens(system, user, temperature)
         return text
+
+    def stream_chat(
+        self,
+        system: str,
+        messages: list[dict],
+        temperature: float = 0.7,
+    ) -> Iterator[str]:
+        """Stream a multi-turn assistant reply token-by-token.
+
+        ``messages`` is the conversation so far as
+        ``[{"role": "user" | "assistant", "content": str}, ...]`` in
+        chronological order, ending with the latest user turn. Yields text
+        chunks as they are produced.
+
+        The default implementation falls back to a single non-streamed chunk so
+        providers without native streaming still work; real backends override
+        this.
+        """
+        last_user = ""
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                last_user = m.get("content", "")
+                break
+        yield self.chat(system, last_user, temperature)
 
     @abc.abstractmethod
     def is_available(self) -> tuple[bool, str]:

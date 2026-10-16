@@ -13,10 +13,12 @@ from tests.conftest import StubLLM
 
 @pytest.fixture()
 def webclient(db, fake_redis, monkeypatch):
-    # Ground chat on a deterministic provider (no network / model).
+    # Ground chat + assistant on a deterministic provider (no network / model).
+    import app.services.assistant as assistant_mod
     import app.services.chat as chat_mod
 
     monkeypatch.setattr(chat_mod, "get_provider", lambda *a, **k: StubLLM())
+    monkeypatch.setattr(assistant_mod, "get_provider", lambda *a, **k: StubLLM())
 
     from app.webapp import create_app
 
@@ -32,19 +34,57 @@ def _signup(client, email="a@b.com", password="supersecret"):
     )
 
 
-def test_dashboard_requires_login(webclient):
+def test_home_requires_login(webclient):
     r = webclient.get("/")
     assert r.status_code == 303
     assert "/login" in r.headers["location"]
 
 
-def test_signup_then_dashboard(webclient):
+def test_signup_then_chat_home(webclient):
     r = _signup(webclient)
     assert r.status_code == 303 and r.headers["location"] == "/"
-    # Session cookie now set → dashboard renders.
+    # Session cookie now set → chat home renders.
     r = webclient.get("/", follow_redirects=True)
     assert r.status_code == 200
+    assert "How can I help" in r.text
+
+
+def test_research_dashboard(webclient):
+    _signup(webclient, email="rd@e.com", password="researchpass")
+    r = webclient.get("/research", follow_redirects=True)
+    assert r.status_code == 200
     assert "Research anything" in r.text
+
+
+def test_new_conversation_and_stream(webclient):
+    _signup(webclient, email="chatapp@e.com", password="chatapppass")
+    r = webclient.post("/api/conversations")
+    assert r.status_code == 200
+    cid = r.json()["id"]
+
+    r = webclient.post(
+        f"/api/conversations/{cid}/message", json={"message": "hi there"}
+    )
+    assert r.status_code == 200
+    assert "stub assistant" in r.text  # streamed reply body
+
+    # Both turns persisted; title derived from the first user message.
+    from app.db import repository as repo
+    from app.db.base import session_scope
+
+    with session_scope() as s:
+        msgs = repo.list_messages(s, cid)
+        convo = repo.get_conversation(s, cid)
+    assert [m.role for m in msgs] == ["user", "assistant"]
+    assert convo.title.startswith("hi there")
+
+
+def test_delete_conversation(webclient):
+    _signup(webclient, email="del@e.com", password="deletepass1")
+    cid = webclient.post("/api/conversations").json()["id"]
+    r = webclient.request("DELETE", f"/api/conversations/{cid}")
+    assert r.status_code == 200
+    assert webclient.get("/api/conversations").json()["conversations"] == []
 
 
 def test_duplicate_signup_rejected(webclient):
@@ -81,7 +121,7 @@ def test_history_lists_users_jobs(webclient, db):
             sources=[["Src", "https://x.test"]], trace={}, num_sources=1,
         )
 
-    r = webclient.get("/", follow_redirects=True)
+    r = webclient.get("/research", follow_redirects=True)
     assert "coffee and sleep" in r.text
 
 

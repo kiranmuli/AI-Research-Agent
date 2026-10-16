@@ -6,6 +6,8 @@ Selected in production by setting ``LLM_PROVIDER=anthropic`` and providing
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from app.llm.base import LLMError, LLMProvider
 from app.settings import get_settings
 
@@ -57,6 +59,25 @@ class AnthropicProvider(LLMProvider):
             "output": getattr(usage, "output_tokens", None) if usage else None,
         }
         return text, tokens
+
+    def stream_chat(
+        self,
+        system: str,
+        messages: list[dict],
+        temperature: float = 0.7,
+    ) -> Iterator[str]:
+        client = self._get_client()
+        try:
+            with client.messages.stream(
+                model=self.model,
+                max_tokens=self._max_tokens,
+                temperature=temperature,
+                system=system,
+                messages=messages,
+            ) as stream:
+                yield from stream.text_stream
+        except Exception as exc:  # noqa: BLE001 - normalize backend errors
+            raise LLMError(f"Anthropic stream failed: {exc}") from exc
 
     def is_available(self) -> tuple[bool, str]:
         if not self._api_key:

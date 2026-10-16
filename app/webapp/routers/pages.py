@@ -15,7 +15,7 @@ from app.webapp.templating import templates
 router = APIRouter()
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/research", response_class=HTMLResponse)
 async def dashboard(
     request: Request,
     user: User = Depends(require_user),

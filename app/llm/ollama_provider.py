@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import ollama
 
 from app.llm.base import LLMError, LLMProvider
@@ -44,6 +46,37 @@ class OllamaProvider(LLMProvider):
             "output": _field(response, "eval_count"),
         }
         return response["message"]["content"].strip(), tokens
+
+    def stream_chat(
+        self,
+        system: str,
+        messages: list[dict],
+        temperature: float = 0.7,
+    ) -> Iterator[str]:
+        msgs = []
+        if system:
+            msgs.append({"role": "system", "content": system})
+        msgs.extend(messages)
+        try:
+            stream = self._client.chat(
+                model=self.model,
+                messages=msgs,
+                options={"temperature": temperature},
+                stream=True,
+            )
+            for chunk in stream:
+                message = _field(chunk, "message")
+                if message is None:
+                    continue
+                piece = (
+                    message.get("content")
+                    if isinstance(message, dict)
+                    else getattr(message, "content", None)
+                )
+                if piece:
+                    yield piece
+        except Exception as exc:  # noqa: BLE001 - normalize backend errors
+            raise LLMError(f"Ollama stream failed: {exc}") from exc
 
     def is_available(self) -> tuple[bool, str]:
         try:
