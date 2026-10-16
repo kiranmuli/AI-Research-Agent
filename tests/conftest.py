@@ -93,5 +93,8 @@ class StubLLM:
     def chat(self, system, user, temperature=0.2):
         return self.chat_with_tokens(system, user, temperature)[0]
 
+    def stream_chat(self, system, messages, temperature=0.7):
+        yield from ["Hello", " from", " the", " stub", " assistant."]
+
     def is_available(self):
         return (self._available, "ok" if self._available else "unavailable")

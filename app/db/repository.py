@@ -197,12 +197,55 @@ def touch_user_login(session: Session, user_id: str) -> None:
 # --- conversations & chat ------------------------------------------------
 
 def create_conversation(
-    session: Session, user_id: str, job_id: str, title: str = ""
+    session: Session, user_id: str, job_id: str | None = None, title: str = ""
 ) -> Conversation:
     convo = Conversation(user_id=user_id, job_id=job_id, title=title[:500])
     session.add(convo)
     session.flush()
     return convo
+
+
+def list_conversations(
+    session: Session, user_id: str, limit: int = 100
+) -> list[Conversation]:
+    """A user's conversations, most-recently-active first (for the sidebar)."""
+    return list(
+        session.scalars(
+            select(Conversation)
+            .where(Conversation.user_id == user_id)
+            .order_by(Conversation.updated_at.desc())
+            .limit(limit)
+        )
+    )
+
+
+def set_conversation_title(
+    session: Session, conversation_id: str, title: str
+) -> None:
+    convo = session.get(Conversation, conversation_id)
+    if convo is not None:
+        convo.title = title[:500]
+
+
+def touch_conversation(session: Session, conversation_id: str) -> None:
+    convo = session.get(Conversation, conversation_id)
+    if convo is not None:
+        convo.updated_at = _now()
+
+
+def delete_conversation(
+    session: Session, conversation_id: str, user_id: str
+) -> bool:
+    convo = session.scalar(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+        )
+    )
+    if convo is None:
+        return False
+    session.delete(convo)
+    return True
 
 
 def get_conversation(
@@ -243,6 +286,10 @@ def add_message(
         conversation_id=conversation_id, role=role, content=content
     )
     session.add(msg)
+    # Bump the thread's activity time so it sorts to the top of the sidebar.
+    convo = session.get(Conversation, conversation_id)
+    if convo is not None:
+        convo.updated_at = _now()
     session.flush()
     return msg
 

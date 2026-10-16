@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat · Research Agent</title>
+  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/chat.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/14.1.2/marked.min.js"></script>
+</head>
+<body class="chat-body">
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <a class="new-chat" href="/">＋ New chat</a>
+    </div>
+    <nav class="convo-list" id="convo-list">
+      {% for c in conversations %}
+      <a class="convo {% if conversation and c.id == conversation.id %}active{% endif %}"
+         href="/c/{{ c.id }}" data-id="{{ c.id }}">
+        <span class="convo-title">{{ c.title or "New chat" }}</span>
+        <button class="convo-del" data-id="{{ c.id }}" title="Delete" aria-label="Delete">×</button>
+      </a>
+      {% endfor %}
+    </nav>
+    <div class="sidebar-foot">
+      <a class="foot-link" href="/research">🔎 Research mode</a>
+      <div class="foot-user">
+        <span class="who">{{ user.email }}</span>
+        <form action="/logout" method="post" class="inline">
+          <button class="link" type="submit">Log out</button>
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <main class="thread-wrap">
+    <div class="thread" id="thread">
+      {% if messages %}
+        {% for m in messages %}
+        <div class="turn turn-{{ m.role }}">
+          <div class="avatar">{{ '🧑' if m.role == 'user' else '✶' }}</div>
+          <div class="bubble" data-role="{{ m.role }}">{{ m.content }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" id="empty-state">
+          <h1>How can I help?</h1>
+          <p class="muted">Ask me anything. Replies stream in as I think.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="composer">
+      <form id="composer-form">
+        <textarea id="composer-input" rows="1" placeholder="Message the assistant…"
+                  maxlength="2000"></textarea>
+        <button type="submit" id="composer-send" aria-label="Send">➤</button>
+      </form>
+      <p class="composer-hint muted">Enter to send · Shift+Enter for newline</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  const state = {
+    conversationId: {{ conversation.id | tojson if conversation else "null" }},
+    streaming: false,
+  };
+  const thread = document.getElementById("thread");
+  const form = document.getElementById("composer-form");
+  const input = document.getElementById("composer-input");
+  const sendBtn = document.getElementById("composer-send");
+
+  // Render existing assistant bubbles as markdown on load.
+  document.querySelectorAll('.bubble[data-role="assistant"]').forEach((el) => {
+    el.innerHTML = marked.parse(el.textContent);
+  });
+
+  function autoGrow() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 200) + "px";
+  }
+  input.addEventListener("input", autoGrow);
+
+  function addTurn(role, text) {
+    const empty = document.getElementById("empty-state");
+    if (empty) empty.remove();
+    const turn = document.createElement("div");
+    turn.className = "turn turn-" + role;
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.textContent = role === "user" ? "🧑" : "✶";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.dataset.role = role;
+    if (role === "user") bubble.textContent = text;
+    turn.appendChild(avatar);
+    turn.appendChild(bubble);
+    thread.appendChild(turn);
+    thread.scrollTop = thread.scrollHeight;
+    return bubble;
+  }
+
+  async function ensureConversation() {
+    if (state.conversationId) return state.conversationId;
+    const res = await fetch("/api/conversations", { method: "POST" });
+    const data = await res.json();
+    state.conversationId = data.id;
+    history.pushState({}, "", "/c/" + data.id);
+    return data.id;
+  }
+
+  async function refreshSidebar() {
+    try {
+      const res = await fetch("/api/conversations");
+      const data = await res.json();
+      const list = document.getElementById("convo-list");
+      list.innerHTML = "";
+      for (const c of data.conversations) {
+        const a = document.createElement("a");
+        a.className = "convo" + (c.id === state.conversationId ? " active" : "");
+        a.href = "/c/" + c.id;
+        a.dataset.id = c.id;
+        a.innerHTML = `<span class="convo-title"></span>` +
+          `<button class="convo-del" data-id="${c.id}" title="Delete">×</button>`;
+        a.querySelector(".convo-title").textContent = c.title || "New chat";
+        list.appendChild(a);
+      }
+      wireDeletes();
+    } catch (_) {}
+  }
+
+  function wireDeletes() {
+    document.querySelectorAll(".convo-del").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        await fetch("/api/conversations/" + id, { method: "DELETE" });
+        if (id === state.conversationId) {
+          location.href = "/";
+        } else {
+          refreshSidebar();
+        }
+      });
+    });
+  }
+  wireDeletes();
+
+  async function send() {
+    const text = input.value.trim();
+    if (!text || state.streaming) return;
+    state.streaming = true;
+    input.value = "";
+    autoGrow();
+    sendBtn.disabled = true;
+
+    addTurn("user", text);
+    const bubble = addTurn("assistant", "");
+    bubble.classList.add("streaming");
+    let raw = "";
+
+    try {
+      const id = await ensureConversation();
+      const res = await fetch("/api/conversations/" + id + "/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({}));
+        bubble.textContent = err.error || "Something went wrong.";
+      } else {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          raw += decoder.decode(value, { stream: true });
+          bubble.textContent = raw;
+          thread.scrollTop = thread.scrollHeight;
+        }
+        bubble.innerHTML = marked.parse(raw);
+      }
+    } catch (_) {
+      bubble.textContent = "Network error — please try again.";
+    } finally {
+      bubble.classList.remove("streaming");
+      state.streaming = false;
+      sendBtn.disabled = false;
+      thread.scrollTop = thread.scrollHeight;
+      refreshSidebar();
+      input.focus();
+    }
+  }
+
+  form.addEventListener("submit", (e) => { e.preventDefault(); send(); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  input.focus();
+</script>
+</body>
+</html>

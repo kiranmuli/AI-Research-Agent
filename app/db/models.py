@@ -188,10 +188,11 @@ class ChatRole(str, enum.Enum):
 
 
 class Conversation(Base):
-    """A chat thread grounded on one research report.
+    """A chat thread.
 
-    Each conversation hangs off the job whose report it discusses, so the chat
-    always has concrete source material to answer from.
+    A conversation may be a free-form assistant chat (``job_id`` is null) or be
+    grounded on a research report (``job_id`` set), in which case the report is
+    used as source material.
     """
 
     __tablename__ = "conversations"
@@ -200,18 +201,23 @@ class Conversation(Base):
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    job_id: Mapped[str] = mapped_column(
+    job_id: Mapped[str | None] = mapped_column(
         ForeignKey("research_jobs.id", ondelete="CASCADE"),
         index=True,
-        nullable=False,
+        nullable=True,
     )
     title: Mapped[str] = mapped_column(String(500), default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, index=True, nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, index=True, nullable=False
+    )
 
     user: Mapped[User] = relationship(back_populates="conversations")
-    job: Mapped[ResearchJob] = relationship(back_populates="conversations")
+    job: Mapped[ResearchJob | None] = relationship(
+        back_populates="conversations"
+    )
     messages: Mapped[list[ChatMessage]] = relationship(
         back_populates="conversation",
         cascade="all, delete-orphan",
