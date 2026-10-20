@@ -16,9 +16,11 @@ def webclient(db, fake_redis, monkeypatch):
     # Ground chat + assistant on a deterministic provider (no network / model).
     import app.services.assistant as assistant_mod
     import app.services.chat as chat_mod
+    import app.webapp.routers.openai_compat as oai_mod
 
     monkeypatch.setattr(chat_mod, "get_provider", lambda *a, **k: StubLLM())
     monkeypatch.setattr(assistant_mod, "get_provider", lambda *a, **k: StubLLM())
+    monkeypatch.setattr(oai_mod, "get_provider", lambda *a, **k: StubLLM())
 
     from app.webapp import create_app
 
@@ -161,6 +163,67 @@ def test_chat_over_report(webclient, db):
     assert len(msgs) == 2
     assert msgs[0].role == "user"
     assert msgs[1].role == "assistant"
+
+
+def _make_api_key():
+    from app.db import repository as repo
+    from app.db.base import session_scope
+
+    with session_scope() as s:
+        t = repo.create_tenant(s, "OAI Co")
+        _, raw = repo.create_api_key(s, t.id, "oai")
+    return raw
+
+
+def test_openai_compat_requires_key(webclient):
+    r = webclient.post(
+        "/v1/chat/completions",
+        json={"messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert r.status_code == 401
+
+
+def test_openai_compat_chat_completion(webclient):
+    key = _make_api_key()
+    r = webclient.post(
+        "/v1/chat/completions",
+        headers={"Authorization": f"Bearer {key}"},
+        json={
+            "model": "any-model",
+            "messages": [
+                {"role": "system", "content": "be nice"},
+                {"role": "user", "content": "hello"},
+            ],
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["object"] == "chat.completion"
+    assert data["choices"][0]["message"]["role"] == "assistant"
+    assert "stub assistant" in data["choices"][0]["message"]["content"]
+
+
+def test_openai_compat_streaming(webclient):
+    key = _make_api_key()
+    r = webclient.post(
+        "/v1/chat/completions",
+        headers={"Authorization": f"Bearer {key}"},
+        json={
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": True,
+        },
+    )
+    assert r.status_code == 200
+    body = r.text
+    assert "chat.completion.chunk" in body
+    assert "data: [DONE]" in body
+
+
+def test_openai_compat_models(webclient):
+    key = _make_api_key()
+    r = webclient.get("/v1/models", headers={"Authorization": f"Bearer {key}"})
+    assert r.status_code == 200
+    assert r.json()["data"][0]["id"]
 
 
 def test_cannot_chat_without_report(webclient, db):

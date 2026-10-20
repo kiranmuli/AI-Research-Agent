@@ -15,7 +15,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-LLMProviderName = Literal["ollama", "anthropic"]
+LLMProviderName = Literal["ollama", "anthropic", "openai"]
 
 
 class Settings(BaseSettings):
@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
     anthropic_max_tokens: int = 4096
+
+    # OpenAI (or any OpenAI-compatible endpoint via openai_base_url)
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4o-mini"
+    openai_base_url: str | None = None  # e.g. a self-hosted OpenAI-compatible URL
+    openai_max_tokens: int = 4096
 
     # --- research behaviour ---
     search_results: int = Field(5, alias="research_search_results")
@@ -120,11 +126,11 @@ class Settings(BaseSettings):
 
     def active_model(self) -> str:
         """The model name for the currently selected provider."""
-        return (
-            self.anthropic_model
-            if self.llm_provider == "anthropic"
-            else self.ollama_model
-        )
+        return {
+            "anthropic": self.anthropic_model,
+            "openai": self.openai_model,
+            "ollama": self.ollama_model,
+        }.get(self.llm_provider, self.ollama_model)
 
 
 @lru_cache(maxsize=1)

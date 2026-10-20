@@ -27,9 +27,13 @@ def build_provider(
         from app.llm.anthropic_provider import AnthropicProvider
 
         return AnthropicProvider(model=model)
+    if name == "openai":
+        from app.llm.openai_provider import OpenAIProvider
+
+        return OpenAIProvider(model=model)
 
     raise ValueError(
-        f"Unknown LLM_PROVIDER '{name}'. Expected one of: ollama, anthropic."
+        f"Unknown LLM_PROVIDER '{name}'. Expected one of: ollama, anthropic, openai."
     )
 
 
@@ -48,7 +52,10 @@ def get_provider(
     """
     s = get_settings()
     name = (provider or s.llm_provider).lower()
-    resolved_model = model or (
-        s.anthropic_model if name == "anthropic" else s.ollama_model
-    )
+    default_model = {
+        "anthropic": s.anthropic_model,
+        "openai": s.openai_model,
+        "ollama": s.ollama_model,
+    }.get(name, s.ollama_model)
+    resolved_model = model or default_model
     return _cached(name, resolved_model)
