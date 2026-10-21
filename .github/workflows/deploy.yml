@@ -11,8 +11,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Guard: only deploy when CI passed (not on a failed CI run).
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Guard: deploy only when CI passed AND deploys are enabled. Set the repo
+    # variable DEPLOY_ENABLED=true (Settings -> Secrets and variables -> Actions
+    # -> Variables) to turn auto-deploy on; leave it unset to pause (the job is
+    # skipped, not failed, so there are no red deploy runs while there's no server).
+    if: ${{ github.event.workflow_run.conclusion == 'success' && vars.DEPLOY_ENABLED == 'true' }}
     steps:
       - name: Deploy to EC2 over SSH
         uses: appleboy/ssh-action@v1.2.0
