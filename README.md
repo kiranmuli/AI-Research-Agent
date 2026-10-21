@@ -204,6 +204,32 @@ curl -s http://localhost:8080/api/v1/research/$ID/report \
 Rate limits apply per API key (default `60/min`, `10/min` for job creation) and
 are configurable via `RATE_LIMIT_DEFAULT` / `RATE_LIMIT_RESEARCH`.
 
+## OpenAI-compatible API
+
+The app also exposes an OpenAI-compatible surface so existing OpenAI client
+libraries and tools can talk to it, routed to whichever provider is configured:
+
+| Method & path | Description |
+|---|---|
+| `GET /v1/models` | List the active model. |
+| `POST /v1/chat/completions` | Chat completion (streaming and non-streaming). |
+
+Authenticate with an app API key as the bearer token:
+
+```bash
+curl -s http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"hello"}]}'
+```
+
+Or with the official OpenAI SDK, point `base_url` at this app:
+
+```python
+from openai import OpenAI
+client = OpenAI(api_key="rak_your_key", base_url="http://localhost:8080/v1")
+client.chat.completions.create(model="any", messages=[{"role":"user","content":"hi"}])
+```
+
 ## Running the platform without Docker
 
 You need Postgres and Redis reachable. Then, in separate terminals:
@@ -319,11 +345,14 @@ environment variables or a `.env` file. Key settings:
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `ollama` | LLM backend: `ollama` or `anthropic` |
+| `LLM_PROVIDER` | `ollama` | LLM backend: `ollama`, `anthropic`, or `openai` |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
 | `OLLAMA_MODEL` | `llama3.2` | Ollama model to use |
 | `ANTHROPIC_API_KEY` | — | Required when `LLM_PROVIDER=anthropic` |
 | `ANTHROPIC_MODEL` | `claude-sonnet-5` | Cloud model to use |
+| `OPENAI_API_KEY` | — | Required when `LLM_PROVIDER=openai` |
+| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model to use |
+| `OPENAI_BASE_URL` | — | Optional: any OpenAI-compatible endpoint |
 | `DATABASE_URL` | `postgresql+psycopg://…` | SQLAlchemy database URL |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis for queue + pub/sub + limits |
 | `SECRET_KEY` | `dev-insecure…` | **Override in production** |

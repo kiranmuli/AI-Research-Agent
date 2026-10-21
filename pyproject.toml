@@ -21,6 +21,7 @@ dependencies = [
     # --- LLM providers ---
     "ollama>=0.3.0",
     "anthropic>=0.39",
+    "openai>=1.40",
     # --- web / API ---
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",

@@ -20,7 +20,14 @@ from app.observability.metrics import (
 )
 from app.settings import get_settings
 from app.webapp.deps import LoginRequired
-from app.webapp.routers import assistant, auth, chat, pages, research
+from app.webapp.routers import (
+    assistant,
+    auth,
+    chat,
+    openai_compat,
+    pages,
+    research,
+)
 
 log = get_logger(__name__)
 
@@ -54,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(pages.router)
     app.include_router(research.router)
     app.include_router(chat.router)
+    app.include_router(openai_compat.router)
 
     _register_infra(app)
 
